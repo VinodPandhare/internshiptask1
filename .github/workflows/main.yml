@@ -45,9 +45,31 @@ jobs:
     - name: Start application with PM2 on port 80
       run: |
         npm install -g pm2
-        pm2 start dist/main.js --name "nestjs-app" -i max -- -p 80
+        pm2 start dist/main.js --name "nestjs-app" -- -p 80
         pm2 save
-        pm2 startup
+        pm2 startup systemd -u $USER --hp $HOME
+
+    - name: Configure NGINX
+      run: |
+        sudo tee /etc/nginx/sites-available/demo > /dev/null <<EOF
+        server {
+            listen 80;
+            server_name _;
+
+            location / {
+                proxy_pass http://localhost:3000;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade \$http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host \$host;
+                proxy_cache_bypass \$http_upgrade;
+            }
+        }
+        EOF
+
+        sudo ln -s /etc/nginx/sites-available/demo /etc/nginx/sites-enabled/
+        sudo nginx -t
+        sudo systemctl restart nginx
 
     - name: Cleanup
       run: |

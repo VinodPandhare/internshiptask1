@@ -38,14 +38,15 @@ jobs:
 
     - name: Install project dependencies and build
       run: |
-        cd internshiptask1  # Adjust if needed based on clone location
+        cd internshiptask1
         npm install
         npm run build
 
     - name: Start application with PM2 on port 80
       run: |
         npm install -g pm2
-        pm2 start dist/main.js --name "nestjs-app" -- -p 80
+        cd internshiptask1
+        pm2 start dist/main.js --name "nestjs-app" -- --port 80
         pm2 save
         pm2 startup systemd -u $USER --hp $HOME
 
@@ -73,8 +74,8 @@ jobs:
 
     - name: Cleanup
       run: |
-        cd ~  # Return to home directory
-        rm -rf internshiptask1  # Remove cloned repository
+        cd ~
+        rm -rf internshiptask1
 
     - name: Final check
       run: |

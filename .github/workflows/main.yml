@@ -13,30 +13,65 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '12.15.0'
-
-    - name: Install dependencies
-      run: npm install
-
-    - name: Build application
-      run: npm run build
-
-    - name: Deploy to EC2
-      env:
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-        EC2_USER: ${{ secrets.EC2_USER }}
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    - name: Update system and install prerequisites
       run: |
-        echo "${SSH_PRIVATE_KEY}" > private_key.pem
-        chmod 600 private_key.pem
-        ssh -o StrictHostKeyChecking=no -i private_key.pem ${EC2_USER}@${EC2_HOST} 'bash -s' << 'EOF'
-          cd /home/ubuntu/internshiptask1  # Replace with your actual path
-          git pull origin master
-          npm install
-          npm run build
-          pm2 restart all
+        sudo apt-get update -y
+        sudo apt-get upgrade -y
+        sudo apt-get install -y build-essential
+        sudo apt-get install -y nginx
+
+    - name: Clone repository
+      run: git clone https://github.com/VinodPandhare/internshiptask1
+
+    - name: Install NVM and Node.js LTS
+      run: |
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+        export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        nvm install --lts
+
+    - name: Install project dependencies and build
+      run: |
+        cd internshiptask1  # Adjust if needed based on clone location
+        npm install
+        npm run build
+
+    - name: Configure NGINX
+      run: |
+        sudo tee /etc/nginx/sites-available/demo > /dev/null <<EOF
+        server {
+            listen 80;
+            server_name YOUR_PUBLIC_IP_OR_DOMAIN;
+
+            location / {
+                proxy_pass http://127.0.0.1:3000;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+            }
+        }
         EOF
-        rm private_key.pem
+        sudo ln -s /etc/nginx/sites-available/demo /etc/nginx/sites-enabled/
+        sudo nginx -t
+        sudo systemctl restart nginx
+        sudo ufw allow 'Nginx Full'
+        sudo ufw enable
+
+    - name: Start application with PM2
+      run: |
+        npm install -g pm2
+        pm2 start dist/main.js --name "nestjs-app"
+        pm2 save
+        pm2 startup
+
+    - name: Cleanup
+      run: |
+        cd ~  # Return to home directory
+        rm -rf internshiptask1  # Remove cloned repository
+
+    - name: Final check
+      run: |
+        echo "Deployment completed successfully."
+

@@ -30,6 +30,12 @@ jobs:
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
         nvm install --lts
 
+    - name: Use Node.js LTS
+      run: |
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        nvm use --lts
+
     - name: Install project dependencies and build
       run: |
         cd internshiptask1  # Adjust if needed based on clone location

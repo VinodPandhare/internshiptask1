@@ -50,6 +50,10 @@ jobs:
           pm2 save
           sudo pm2 startup systemd -u $USER --hp $HOME
 
+      - name: Verify PM2 process
+        run: |
+          pm2 list
+
       - name: Configure NGINX
         run: |
           sudo tee /etc/nginx/sites-available/demo > /dev/null <<EOF

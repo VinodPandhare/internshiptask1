@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: Deploy to EC2
 
 on:
   push:
@@ -6,77 +6,49 @@ on:
       - master
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Update system and install prerequisites
-      run: |
-        sudo apt-get update -y
-        sudo apt-get upgrade -y
-        sudo apt-get install -y build-essential
-        sudo apt-get install -y nginx
+      - name: Install SSH client
+        run: |
+          sudo apt-get update && sudo apt-get install openssh-client -y
 
-    - name: Clone repository
-      run: git clone https://github.com/VinodPandhare/internshiptask1
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Install NVM and Node.js LTS
-      run: |
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        nvm install --lts
+      - name: Install Node.js and npm
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
 
-    - name: Use Node.js LTS
-      run: |
-        export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        nvm use --lts
+      - name: Install dependencies
+        run: npm install
 
-    - name: Install project dependencies and build
-      run: |
-        cd internshiptask1
-        npm install
-        npm run build
+      - name: Build application
+        run: npm run build
 
-    - name: Start application with PM2 on port 80
-      run: |
-        npm install -g pm2
-        cd internshiptask1
-        pm2 start dist/main.js --name "nestjs-app" -- --port 80
-        pm2 save
-        pm2 startup systemd -u $USER --hp $HOME
+      - name: Deploy to EC2
+        run: |
+          scp -r ./dist ubuntu@${{ secrets.EC2_HOST }}:~/internshiptask1
 
-    - name: Configure NGINX
-      run: |
-        sudo tee /etc/nginx/sites-available/demo > /dev/null <<EOF
-        server {
-            listen 80;
-            server_name _;
+      - name: SSH into EC2 and setup environment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/internshiptask1
+            pm2 delete nestjs-app || true
+            pm2 start dist/main.js --name "nestjs-app"
+            pm2 save
+            sudo nginx -t
+            sudo systemctl restart nginx
 
-            location / {
-                proxy_pass http://localhost:3000;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade \$http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_set_header Host \$host;
-                proxy_cache_bypass \$http_upgrade;
-            }
-        }
-        EOF
-
-        sudo ln -s /etc/nginx/sites-available/demo /etc/nginx/sites-enabled/
-        sudo nginx -t
-        sudo systemctl restart nginx
-
-    - name: Cleanup
-      run: |
-        cd ~
-        rm -rf internshiptask1
-
-    - name: Final check
-      run: |
-        echo "Deployment completed successfully."
+      - name: Complete Deployment
+        run: echo "Deployment completed successfully!"

@@ -45,7 +45,7 @@ jobs:
     - name: Start application with PM2 on port 80
       run: |
         npm install -g pm2
-        pm2 start dist/main.js --name "nestjs-app" -- -p 80
+        pm2 start dist/main.js --name "nestjs-app" -i max -- -p 80
         pm2 save
         pm2 startup
 
